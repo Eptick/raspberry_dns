@@ -2,3 +2,4 @@ vendor/
 .env
 web/status.json
 web/data.json
+web/mac

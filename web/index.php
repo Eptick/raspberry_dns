@@ -20,6 +20,8 @@ $app->register(new Silex\Provider\TwigServiceProvider(), array(
 // 502 Missing parameters in request
 // 503 No Status file
 // 504 No Data file
+// 505 Mac Adress not found
+
 
 // 200 Ok
 // 201 Needs approval of ip change
@@ -63,6 +65,19 @@ function Data(){
   }
   return $data;
 }
+function GetMacAdress(){
+  $mac = getenv("RPI_MAC");
+  if(!$mac){
+    try{
+      $mac = @file_get_contents("mac");
+    } catch(Exception $e) {
+      $mac = false;
+    }
+    if(!$mac)
+      file_put_contents("status.json", json_encode( array("status" => 505) ) );
+  }
+  return $mac;
+}
 
 /* 
  * End Functions 
@@ -101,18 +116,21 @@ $app->post('/', function(Request $request) use($app) {
   $app['monolog']->addDebug('logging output.');
   $data = $request->request->all();
   if(!is_null(@$data['mac'])){
-    if($data['mac'] == "") {
-      // Prošla provjera mac adrese
-      if(!is_null(@$data['ip']) ) {
-        if(!is_null(@$data["ssid"])){
-            // Prošlo sve provjere zapiši u temp file i status treba biti da se treba odobriti promjena ip adrese mail ili interface?
-            unset($data["mac"]);
-            file_put_contents("data.json", json_encode( $data ) );
-            file_put_contents("status.json", json_encode( array("status" => 201) ) );
-            $data = array( 'status' => 200 );
+    $mac = GetMacAdress();
+    if(strlen($mac) != 0 ){
+      if($data['mac'] == $mac) {
+        // Prošla provjera mac adrese
+        if(!is_null(@$data['ip']) ) {
+          if(!is_null(@$data["ssid"])){
+              // Prošlo sve provjere zapiši u temp file i status treba biti da se treba odobriti promjena ip adrese mail ili interface?
+              unset($data["mac"]);
+              file_put_contents("data.json", json_encode( $data ) );
+              file_put_contents("status.json", json_encode( array("status" => 201) ) );
+              $data = array( 'status' => 200 );
+          } else $data = array('status' => 502);
         } else $data = array('status' => 502);
-      } else $data = array('status' => 502);
-    } else $data = array('status' => 501);
+      } else $data = array('status' => 501);
+    } else $data = array('stauts' => 505);
   } else $data = array('status' => 502);
 
   return Respond( $data );
@@ -142,7 +160,7 @@ $app->get('/discover', function(Request $request) use($app) {
   }
 });
 $app->get("/test", function() use($app){
-  return var_dump( getenv("RPI_MAC", true) );
+  return var_dump( GetMacAdress() );
 });
 
 $app->run();
