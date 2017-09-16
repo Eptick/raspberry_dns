@@ -135,8 +135,24 @@ $app->post('/', function(Request $request) use($app) {
           if(!is_null(@$data["ssid"])){
               // Prošlo sve provjere zapiši u temp file i status treba biti da se treba odobriti promjena ip adrese mail ili interface?
               unset($data["mac"]);
-              file_put_contents("data_to_be_approved.json", json_encode( $data ) );
-              file_put_contents("status.json", json_encode( array("status" => 201) ) );
+              try{
+                $data_json = @file_get_contents("data.json");
+                $data_file = json_decode($data_json, true);
+              } catch(Exception $e) {
+                $data_file = false;
+              }
+              if($data_file){
+                if( ($data_file["ip"] == $data["ip"] ) && ($data_file["ssid"] == $data["ssid"])  )
+                  return Respond(null, 200);
+                else {
+                  file_put_contents("data_to_be_approved.json", json_encode( $data ) );
+                  file_put_contents("status.json", json_encode( array("status" => 201) ) );  
+                }
+              } else {
+                file_put_contents("data_to_be_approved.json", json_encode( $data ) );
+                file_put_contents("status.json", json_encode( array("status" => 201) ) );
+              }
+
               $data = array( 'status' => 200 );
           } else $data = array('status' => 502);
         } else $data = array('status' => 502);
