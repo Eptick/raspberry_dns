@@ -61,7 +61,13 @@ function Data(){
     $data = false;
   }
   if(!$data){
-    file_put_contents("status.json", json_encode( array("status" => 504) ) );
+    try{
+      $_data_json = @file_get_contents("data_to_be_approved.json");
+      $_data = json_decode($_data_json, true);
+    } catch(Exception $e) {
+      $_data = false;
+    }
+    if(!$_data ) file_put_contents("status.json", json_encode( array("status" => 504) ) );
   }
   return $data;
 }
@@ -89,21 +95,26 @@ function GetMacAdress(){
 // TODO Ovdje ide view za obavještavanje i to sve živo
 $app->get('/', function(Request $request) use($app) {
   $app['monolog']->addDebug('logging output.');
+  $data = Data();
   $status = Status();
   if(!$status) return Respond(null, 503);
 
   switch($status["status"]){
     case 201:
-      $data = Data();
-      if(!$data) return Respond( array('status'=>404) );
+      $response_data = $status;
+      $data = @file_get_contents("data_to_be_approved.json", true);
+      $response_data["data"] = json_decode( $data, true );
+      return $app["twig"]->render("index.twig", $response_data);
+    break;
+    case 200:
       $response_data = $status;
       $response_data["data"] = $data;
-
       return $app->redirect("http://".$data["ip"]);
     break;
     case 504:
-      // No data file view
-      return Respond($status);
+      $response_data = $status;
+
+      return $app["twig"]->render("index.twig", $response_data);
     default:
       return Respond($status);
     break;
@@ -124,7 +135,7 @@ $app->post('/', function(Request $request) use($app) {
           if(!is_null(@$data["ssid"])){
               // Prošlo sve provjere zapiši u temp file i status treba biti da se treba odobriti promjena ip adrese mail ili interface?
               unset($data["mac"]);
-              file_put_contents("data.json", json_encode( $data ) );
+              file_put_contents("data_to_be_approved.json", json_encode( $data ) );
               file_put_contents("status.json", json_encode( array("status" => 201) ) );
               $data = array( 'status' => 200 );
           } else $data = array('status' => 502);
@@ -145,9 +156,6 @@ $app->get('/discover', function(Request $request) use($app) {
   if(!$status) return Respond(null, 503);
 
   switch($status["status"]){
-    case 201:
-      return Respond( $status );
-    break;
     case 200:
       $data = Data();
       if(!$data) return Respond( array('status'=>404) );
@@ -158,6 +166,42 @@ $app->get('/discover', function(Request $request) use($app) {
     default:
       return Respond($status);
   }
+});
+$app->get("/approve", function(Request $request) use($app){
+  $data = $request->query->all();
+  if(!is_null($data)){
+    if(isset($data["status"])){
+      $status = intval($data["status"]);
+      switch($status)
+      {
+        case 200:
+          $data = file_get_contents("data_to_be_approved.json");
+          file_put_contents("data.json", $data);
+          @unlink("data_to_be_approved.json");
+          file_put_contents("status.json", json_encode( array("status" => 200) ) );
+          return Respond(null, 200);
+        break;
+      }
+    } else return Respond(null, 502);
+  } else return Respond(null, 303);
+  return Respond();
+});
+$app->get("/deny", function(Request $request) use($app){
+  $data = $request->query->all();
+  if(!is_null($data)){
+    if(isset($data["status"])){
+      $status = intval($data["status"]);
+      switch($status)
+      {
+        case 200:
+          @unlink("data_to_be_approved.json");
+          file_put_contents("status.json", json_encode( array("status" => 504) ) );
+          return Respond(null, 200);
+        break;
+      }
+    } else return Respond(null, 502);
+  } else return Respond(null, 303);
+  return Respond();
 });
 $app->get("/test", function() use($app){
   return var_dump( GetMacAdress() );

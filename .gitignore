@@ -3,3 +3,4 @@ vendor/
 web/status.json
 web/data.json
 web/mac
+web/data_to_be_approved.json
